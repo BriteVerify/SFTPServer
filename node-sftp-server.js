@@ -76,11 +76,12 @@ var DirectoryEmitter = (function(superClass) {
     }
   };
 
-  DirectoryEmitter.prototype.file = function(name) {
+  DirectoryEmitter.prototype.file = function(name, attrs) {
+    var newAttrs = attrs || {};
     this.stopped = this.sftpStream.name(this.req, {
       filename: name.toString(),
       longname: name.toString(),
-      attrs: {}
+      attrs: newAttrs
     });
     if (!this.stopped && !this.done) {
       return this.emit("dir");
@@ -133,6 +134,11 @@ var SFTPServer = (function(superClass) {
       privateKey: fs.readFileSync(options.privateKeyFile)
     }, (function(_this) {
       return function(client, info) {
+        client._sshstream._authFailure = client._sshstream.authFailure;
+        client._sshstream.authFailure = function() {
+            client._sshstream._authFailure(['password']);
+        }
+
         client.on('authentication', function(ctx) {
           debug("SFTP Server: on('authentication')");
           _this.auth_wrapper = new ContextWrapper(ctx, _this);
@@ -370,6 +376,9 @@ var SFTPSession = (function(superClass) {
         rs._read = (function(_this) {
           return function(bytes) {
             if (started) {
+              if(rs._readableState.length < 32768) {
+                _this.handles[handle].stream.push(null);
+              }
               return;
             }
             handle = _this.fetchhandle();
