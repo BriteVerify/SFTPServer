@@ -245,6 +245,8 @@ var SFTPSession = (function(superClass) {
     this.sftpStream = sftpStream1;
     this.max_filehandle = 0;
     this.handles = {};
+    this.expectedOffset = 0;
+    this.withHeldParts = {};
     ref = this.constructor.Events;
     fn = (function(_this) {
       return function(event) {
@@ -433,7 +435,20 @@ var SFTPSession = (function(superClass) {
   };
 
   SFTPSession.prototype.WRITE = function(reqid, handle, offset, data) {
-    this.handles[handle].stream.push(data);
+    if(this.expectedOffset == offset){
+      this.expectedOffset+=data.length;
+      this.handles[handle].stream.push(data);
+    }else{
+      this.withHeldParts[offset] = data;
+    }
+
+    while (this.withHeldParts[this.expectedOffset]){
+      let withHeldDataLength = this.withHeldParts[this.expectedOffset].length;
+      this.handles[handle].stream.push(this.withHeldParts[this.expectedOffset]);
+      delete this.withHeldParts[this.expectedOffset];
+      this.expectedOffset+=withHeldDataLength;
+    }
+
     return this.sftpStream.status(reqid, ssh2.SFTP_STATUS_CODE.OK);
   };
 
